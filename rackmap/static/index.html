@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rackmap</title>
+  <link rel="stylesheet" href="/static/vendor/xterm.css">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="bar" id="bar" hidden>
+    <div class="brand"><span class="mark" aria-hidden="true"></span><span class="brand-name">rackmap</span></div>
+    <nav class="nav" aria-label="Sections">
+      <button type="button" id="nav-dashboard" aria-current="page"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="10" rx="1.5"/><rect x="13" y="3" width="8" height="6" rx="1.5"/><rect x="13" y="11" width="8" height="10" rx="1.5"/><rect x="3" y="15" width="8" height="6" rx="1.5"/></svg><span>Dashboard</span></button>
+      <button type="button" id="nav-devices"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="11" width="18" height="5" rx="1.5"/><path d="M6.5 6.5h.01M6.5 13.5h.01M8 20h8"/></svg><span>Devices</span></button>
+      <button type="button" id="nav-racks"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="1.5"/><path d="M8 6.5h8M8 10.5h8M8 14.5h8M8 18h8"/></svg><span>Racks</span></button>
+      <button type="button" id="nav-map"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="12" cy="18" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M12 7.2v4.3M5 15.8V13a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 13v2.8M12 11.5v4.3"/></svg><span>Network map</span></button>
+      <button type="button" id="nav-discovery"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><span>Discovery</span> <span class="badge" id="nav-badge" hidden></span></button>
+      <button type="button" id="nav-consoles"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M12.5 15H17"/></svg><span>Consoles</span></button>
+      <button type="button" id="nav-monitoring"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 4 12 2.5-6h5"/></svg><span>Monitoring</span> <span class="badge alert" id="nav-alerts" hidden></span></button>
+      <button type="button" id="nav-settings"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg><span>Settings</span></button>
+    </nav>
+    <div class="who">
+      <span id="who-name"></span>
+      <button class="link" id="sign-out" type="button">Sign out</button>
+    </div>
+  </header>
+
+  <aside class="drawer" id="drawer" hidden aria-label="Details of the selected equipment">
+    <section id="detail" hidden></section>
+  </aside>
+
+  <main id="main" aria-live="polite">
+    <p class="loading">Loading…</p>
+  </main>
+
+  <template id="t-setup">
+    <section class="card narrow">
+      <div class="brand big"><span class="mark" aria-hidden="true"></span>rackmap</div>
+      <h1>Create the administrator account</h1>
+      <p class="hint">This is the first time rackmap has been opened. The account you create here is the only one that can sign in.</p>
+      <form id="form" novalidate>
+        <label>Name<input name="name" autocomplete="username" required maxlength="64" autofocus></label>
+        <label>Password<input name="password" type="password" autocomplete="new-password" required minlength="10" maxlength="256"></label>
+        <label>Password again<input name="confirm" type="password" autocomplete="new-password" required maxlength="256"></label>
+        <p class="hint">At least 10 characters.</p>
+        <p class="error" id="error" role="alert" hidden></p>
+        <button type="submit" class="primary">Create account</button>
+      </form>
+    </section>
+  </template>
+
+  <template id="t-login">
+    <section class="card narrow">
+      <div class="brand big"><span class="mark" aria-hidden="true"></span>rackmap</div>
+      <h1>Sign in</h1>
+      <form id="form" novalidate>
+        <label>Name<input name="name" autocomplete="username" required maxlength="64" autofocus></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required maxlength="256"></label>
+        <label id="code-row" hidden>Code from your authenticator app<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="20" placeholder="123456"><span class="hint">Lost the phone? Enter one of your recovery codes instead.</span></label>
+        <p class="error" id="error" role="alert" hidden></p>
+        <button type="submit" class="primary">Sign in</button>
+      </form>
+      <div id="sso-box" hidden>
+        <p class="or"><span>or</span></p>
+        <a class="button-link wide" id="sso-button" href="/api/sso/start"></a>
+      </div>
+    </section>
+  </template>
+
+  <template id="t-dashboard">
+    <section class="home dash" id="dash">
+      <div class="page-head"><h1>Dashboard</h1><p class="hint" id="dash-sub"></p></div>
+      <div class="tiles" id="dash-tiles"></div>
+      <div class="dash-grid">
+        <section class="card" id="dash-attention"><h2>Needs attention</h2><div id="dash-attention-list"><p class="hint">Checking…</p></div></section>
+        <section class="card" id="dash-services"><h2>Connections</h2><div id="dash-services-list"><p class="hint">Loading…</p></div></section>
+        <section class="card" id="dash-actions"><h2>Latest actions</h2><div id="dash-actions-list"><p class="hint">Loading…</p></div></section>
+      </div>
+      <p class="foot">rackmap <span id="version"></span></p>
+    </section>
+  </template>
+
+  <template id="t-devices">
+    <section class="home" id="devices-page">
+      <div class="page-head">
+        <h1>Devices</h1>
+        <div class="actions">
+          <input type="search" id="device-filter" placeholder="Filter by name, model or address" aria-label="Filter devices">
+          <button type="button" class="primary" id="add-device">Add equipment</button>
+        </div>
+      </div>
+      <div class="table-wrap card">
+        <table class="device-table" id="device-table">
+          <thead><tr id="device-head"></tr></thead>
+          <tbody id="device-rows"></tbody>
+        </table>
+        <p class="hint" id="device-none" hidden>Nothing recorded yet. Add equipment, or let Discovery find it.</p>
+      </div>
+      <p class="foot">rackmap <span id="version"></span></p>
+    </section>
+  </template>
+
+  <template id="t-map">
+    <section class="home" id="map-page">
+      <div class="page-head"><div><h1>Network map</h1><p class="hint" id="map-sub"></p></div><div class="actions"><button type="button" class="secondary" id="map-refresh">Check the wiring again</button></div></div>
+      <div class="card map-card"><div id="map-box"><p class="hint">Drawing…</p></div></div>
+      <p class="foot">rackmap <span id="version"></span></p>
+    </section>
+  </template>
+
+  <template id="t-home">
+    <section class="home">
+      <div class="toolbar">
+        <div class="tabs" id="rack-tabs" role="tablist" aria-label="Racks"></div>
+        <div class="actions">
+          <button type="button" class="secondary" id="add-rack">Add rack</button>
+          <button type="button" class="primary" id="add-device">Add equipment</button>
+        </div>
+      </div>
+
+      <div class="empty card" id="no-racks" hidden>
+        <h1>No racks yet</h1>
+        <p class="hint">Add your first rack, then place equipment in it. Equipment that doesn't live in a rack can be recorded too.</p>
+        <button type="button" class="primary" id="add-first-rack">Add a rack</button>
+      </div>
+
+      <div class="workspace" id="workspace" hidden>
+        <div class="rack-col">
+          <div class="rack-head">
+            <div>
+              <h1 id="rack-name"></h1>
+              <p class="hint" id="rack-sub"></p>
+              <p class="hint" id="rack-totals" hidden></p>
+            </div>
+            <div class="rack-tools">
+              <div class="seg" role="group" aria-label="Side of the rack shown">
+                <button type="button" id="face-front" aria-pressed="true">Front</button>
+                <button type="button" id="face-rear" aria-pressed="false">Rear</button>
+              </div>
+              <label class="inline-choice" id="readout-box" hidden>Show<select id="readout-pick">
+                <option value="none">no readings</option>
+                <option value="temp">temperature</option>
+                <option value="power">power</option>
+                <option value="traffic">traffic</option>
+              </select></label>
+              <label class="check" id="cables-box"><input type="checkbox" id="cables-show"> Cables</label>
+              <button type="button" class="link" id="cables-open">Cable list <span class="badge" id="cables-badge" hidden></span></button>
+              <button type="button" class="link" id="edit-rack">Edit rack</button>
+            </div>
+          </div>
+          <div class="rack-wrap">
+            <div class="rack" id="rack">
+              <ol class="units" id="units" aria-hidden="true"></ol>
+              <div class="bay" id="bay"></div>
+              <ol class="labels" id="labels"></ol>
+              <svg class="cables" id="cable-layer" aria-hidden="true"></svg>
+            </div>
+          </div>
+        </div>
+
+        <aside class="side">
+          <section class="card" id="unplaced">
+            <h2>Not in a rack</h2>
+            <ul class="plain" id="unplaced-list"></ul>
+            <p class="hint" id="unplaced-none">Everything recorded is in a rack.</p>
+          </section>
+        </aside>
+      </div>
+      <p class="foot">rackmap <span id="version"></span> · equipment database from the NetBox community device-type library (CC0)</p>
+    </section>
+  </template>
+
+  <template id="t-discovery">
+    <section class="home discovery">
+      <div class="disc-grid">
+        <section class="card" id="scan-card">
+          <h1>Find equipment on the network</h1>
+          <p class="hint">rackmap checks every address on the networks you list and shows what answers. Nothing is added until you add it.</p>
+          <form id="scan-form" novalidate>
+            <label>Networks to scan
+              <textarea name="networks" rows="3" placeholder="192.168.1.0/24" spellcheck="false" autocomplete="off"></textarea>
+            </label>
+            <p class="hint" id="net-suggest" hidden></p>
+            <details id="router-box">
+              <summary>Ask the router for hardware addresses (optional)</summary>
+              <p class="hint">rackmap can only see hardware addresses, and so makers, for devices on its own network. If your router has SNMP switched on, it can supply them for every network.</p>
+              <div class="row">
+                <label>Router address<input name="router" maxlength="64" placeholder="192.168.1.1" inputmode="decimal" autocomplete="off"></label>
+                <label>SNMP community<input name="community" type="password" maxlength="64" autocomplete="off" placeholder="public"></label>
+              </div>
+              <p class="hint" id="community-note" hidden>A community is saved. Leave the box empty to keep it.</p>
+            </details>
+            <p class="error" id="scan-error" role="alert" hidden></p>
+            <div class="buttons">
+              <button type="submit" class="primary" id="scan-go">Scan now</button>
+              <span class="hint" id="scan-status" role="status"></span>
+            </div>
+            <progress id="scan-progress" max="100" value="0" hidden></progress>
+          </form>
+        </section>
+
+        <section id="found">
+          <div class="found-head">
+            <h1 id="found-title">Nothing found yet</h1>
+            <label class="check"><input type="checkbox" id="show-ignored"> Show ignored</label>
+          </div>
+          <p class="hint" id="found-empty">Run a scan to see what is on your network.</p>
+          <h2 id="h-new" hidden>New</h2>
+          <ul class="hosts" id="hosts-new"></ul>
+          <h2 id="h-monitored" hidden>Seen by the monitoring system</h2>
+          <p class="hint" id="monitored-hint" hidden>The monitoring system watches these, and nothing recorded here has the same address or name.</p>
+          <ul class="hosts" id="hosts-monitored"></ul>
+          <h2 id="h-known" hidden>Already recorded</h2>
+          <ul class="hosts" id="hosts-known"></ul>
+          <h2 id="h-ignored" hidden>Ignored</h2>
+          <ul class="hosts" id="hosts-ignored"></ul>
+        </section>
+      </div>
+      <p class="foot">rackmap <span id="version"></span> · maker names from the IEEE address registry</p>
+    </section>
+  </template>
+
+  <template id="t-monitoring">
+    <section class="home monitoring">
+      <div class="disc-grid">
+        <section class="card" id="source-card">
+          <h1>Monitoring source</h1>
+          <p class="hint">rackmap can show health, alerts and graphs from a monitoring system you already run. It only reads from it. LibreNMS is supported today.</p>
+          <div id="source-state"></div>
+          <div class="buttons">
+            <button type="button" class="primary" id="source-edit">Connect a monitoring system</button>
+          </div>
+        </section>
+
+        <section id="found">
+          <div class="found-head">
+            <h1 id="alerts-title">Alerts</h1>
+          </div>
+          <p class="hint" id="alerts-empty"></p>
+          <ul class="hosts" id="alerts-list"></ul>
+          <h2 id="h-unmatched" hidden>Monitored, but not in rackmap</h2>
+          <p class="hint" id="unmatched-hint" hidden>The monitoring system watches these, and nothing here has the same address or name. Add… records one as equipment; it then links itself.</p>
+          <ul class="hosts" id="unmatched-list"></ul>
+        </section>
+      </div>
+      <p class="foot">rackmap <span id="version"></span></p>
+    </section>
+  </template>
+
+  <template id="t-settings">
+    <section class="home settings">
+      <section class="card" id="remote-card">
+        <h1>Remote access over Tailscale</h1>
+        <p class="hint">Tailscale joins your own devices into a private network that works from anywhere. If the machine rackmap runs on is part of yours, rackmap can be opened from any of those devices, at home or away, under the machine's Tailscale name. Nothing is opened to the internet.</p>
+        <div id="remote-state"><p class="hint">Asking Tailscale…</p></div>
+        <p class="error" id="remote-error" role="alert" hidden></p>
+        <div class="buttons" id="remote-buttons"></div>
+      </section>
+      <section class="card" id="account-card">
+        <h1>Your sign-in</h1>
+        <div id="account-state"><p class="hint">Loading…</p></div>
+        <form id="password-form" novalidate hidden>
+          <h2 class="sub-head">Change the password</h2>
+          <label>Current password<input name="current" type="password" autocomplete="current-password" maxlength="256"></label>
+          <div class="row">
+            <label>New password<input name="fresh" type="password" autocomplete="new-password" maxlength="256"></label>
+            <label>New password again<input name="again" type="password" autocomplete="new-password" maxlength="256"></label>
+          </div>
+          <p class="hint">At least 10 characters. Longer is better than complicated. Other browsers signed in as you are signed out.</p>
+          <p class="hint" id="password-done" hidden>Password changed.</p>
+          <div class="buttons"><span class="spacer"></span><button type="submit" class="secondary">Change password</button></div>
+        </form>
+        <p class="error" id="account-error" role="alert" hidden></p>
+      </section>
+      <section class="card" id="sso-card">
+        <h1>Single sign-on</h1>
+        <p class="hint">Let a sign-in provider you run (Authentik, Keycloak or any other that speaks OpenID Connect) vouch for who is signing in, so rackmap gets the same password and second step as everything else. rackmap's own name and password keep working, so you are never locked out if the provider is down.</p>
+        <form id="sso-form" novalidate>
+          <label>Issuer address<input name="issuer" maxlength="300" autocomplete="off" spellcheck="false" placeholder="https://auth.example.com/application/o/rackmap/"></label>
+          <div class="row">
+            <label>Client ID<input name="client_id" maxlength="200" autocomplete="off" spellcheck="false"></label>
+            <label>Client secret<input name="secret" type="password" maxlength="400" autocomplete="new-password"></label>
+          </div>
+          <label>Who may sign in this way<input name="allowed" maxlength="2000" autocomplete="off" spellcheck="false" placeholder="alex, someone@example.com"></label>
+          <p class="hint">User names or email addresses at the provider, separated by commas. Anyone else is turned away, even if the provider lets them through.</p>
+          <label>Wording on the button<input name="label" maxlength="60" autocomplete="off" placeholder="Sign in with Authentik"></label>
+          <p class="hint">In the provider, create an OAuth2 / OpenID Connect application for rackmap with this return address (one for each address you open rackmap at):</p>
+          <pre class="key-line" id="sso-return"></pre>
+          <p class="hint" id="sso-secret-note" hidden>Leave the client secret empty to keep the saved one.</p>
+          <p class="error" id="sso-error" role="alert" hidden></p>
+          <div class="buttons">
+            <button type="button" class="danger" id="sso-remove" hidden>Turn off</button>
+            <span class="spacer"></span>
+            <button type="submit" class="primary" id="sso-save">Save and check</button>
+          </div>
+        </form>
+      </section>
+      <section class="card" id="actions-card">
+        <h1>What rackmap has done</h1>
+        <p class="hint">Every action sent through a service connection, newest first, with who asked for it. Requests rackmap refused, and ones the service turned down, are listed too.</p>
+        <div id="actions-list"><p class="hint">Loading…</p></div>
+      </section>
+      <p class="foot">rackmap <span id="version"></span></p>
+    </section>
+  </template>
+
+  <template id="t-screen">
+    <section class="home screen-view">
+      <section class="card term-card">
+        <div class="term-head">
+          <div>
+            <h1 id="screen-title">Remote screen</h1>
+            <p class="hint" id="screen-status" role="status">Connecting…</p>
+          </div>
+          <div class="buttons">
+            <button type="button" class="secondary" id="screen-cad">Ctrl+Alt+Del</button>
+            <button type="button" class="secondary" id="screen-type">Type text…</button>
+            <button type="button" class="secondary" id="screen-power">Power…</button>
+            <button type="button" class="secondary" id="screen-reconnect" hidden>Reconnect</button>
+            <button type="button" class="secondary" id="screen-close">Close</button>
+          </div>
+        </div>
+        <div class="screen" id="screen" tabindex="0" aria-label="Remote screen. Click it to take control; keys you press then go to the machine.">
+          <img id="screen-img" alt="" draggable="false">
+          <p class="screen-note" id="screen-note">Waiting for the picture…</p>
+        </div>
+        <p class="hint">Click the picture to take control: your keyboard and mouse then go to the machine. Click anywhere outside it to stop. A few combinations, such as Alt+Tab, Ctrl+W and the Windows key, are kept by your own computer and never reach it. <a id="screen-page" target="_blank" rel="noopener noreferrer">Open the KVM's own page</a></p>
+      </section>
+      <p class="foot">rackmap <span id="version"></span></p>
+    </section>
+  </template>
+
+  <template id="t-consoles">
+    <section class="home consoles">
+      <div class="empty card" id="no-consoles" hidden>
+        <h1>No console server yet</h1>
+        <p class="hint">A console server connects to the serial ports of your equipment. Connect one and rackmap gives you a terminal to each port, here in the browser.</p>
+        <button type="button" class="primary" id="add-first-console">Connect a console server</button>
+      </div>
+
+      <section class="card term-card" id="term-card" hidden>
+        <div class="term-head">
+          <div>
+            <h1 id="term-title"></h1>
+            <p class="hint" id="term-status" role="status"></p>
+          </div>
+          <div class="buttons">
+            <button type="button" class="secondary" id="term-reconnect" hidden>Reconnect</button>
+            <button type="button" class="secondary" id="term-close">Disconnect</button>
+          </div>
+        </div>
+        <div class="term" id="term"></div>
+      </section>
+
+      <div id="console-servers"></div>
+      <div class="actions" id="console-actions" hidden>
+        <button type="button" class="secondary" id="add-console">Connect another console server</button>
+      </div>
+      <p class="foot">rackmap <span id="version"></span> · terminal by xterm.js (MIT)</p>
+    </section>
+  </template>
+
+  <dialog id="console-dialog">
+    <form method="dialog" id="console-form" novalidate>
+      <h1 id="console-dialog-title">Connect a console server</h1>
+      <div class="row">
+        <label>Name<input name="name" maxlength="80" placeholder="Rack console server"></label>
+        <label>Kind<select name="kind" id="console-kind"></select></label>
+      </div>
+      <div class="row">
+        <label>Address<input name="host" maxlength="120" placeholder="192.168.1.50" autocomplete="off" inputmode="url"></label>
+        <label>SSH port<input name="port" type="number" min="1" max="65535" value="22" inputmode="numeric"></label>
+      </div>
+      <div class="row">
+        <label>Account<input name="username" maxlength="64" autocomplete="off" placeholder="root"></label>
+        <label>Password<input name="password" type="password" maxlength="256" autocomplete="new-password"></label>
+      </div>
+      <p class="hint" id="console-pw-note" hidden>Leave the password empty to keep the saved one. Entering it again also accepts the server's current SSH identity.</p>
+      <div class="row">
+        <label>Number of serial ports<input name="port_count" type="number" min="1" max="96" value="16" inputmode="numeric"></label>
+        <label>Equipment in the rack<select name="device_id" id="console-device"></select></label>
+      </div>
+      <p class="hint" id="console-existing-note" hidden></p>
+      <p class="hint">rackmap signs in to check these details before saving. The password is stored encrypted on this rackmap server.</p>
+      <p class="error" id="console-error" role="alert" hidden></p>
+      <div class="buttons">
+        <button type="button" class="danger" id="console-delete" hidden>Remove</button>
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Cancel</button>
+        <button type="submit" class="primary" id="console-save">Connect</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="port-dialog">
+    <form method="dialog" id="port-form" novalidate>
+      <h1 id="port-dialog-title">Port</h1>
+      <label>Label<input name="label" maxlength="80" placeholder="What is plugged into this port"></label>
+      <label>Equipment<select name="device_id" id="port-device"></select></label>
+      <p class="hint">Tying a port to a piece of equipment adds an Open console button to it in the rack view.</p>
+      <p class="error" id="port-error" role="alert" hidden></p>
+      <div class="buttons">
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Cancel</button>
+        <button type="submit" class="primary" id="port-save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="kvm-dialog">
+    <form method="dialog" id="kvm-form" novalidate>
+      <h1 id="kvm-dialog-title">Set up a KVM</h1>
+      <p class="hint">A KVM carries a machine's screen, keyboard and mouse somewhere else. Once one is set up, the rest of your equipment gets a “KVM port” choice.</p>
+      <div class="row">
+        <label>Name<input name="name" maxlength="80" placeholder="Rack KVM"></label>
+        <label>Kind<select name="kind" id="kvm-kind"></select></label>
+      </div>
+      <label>Web address (optional)<input name="url" maxlength="300" autocomplete="off" placeholder="https://192.168.1.70" inputmode="url"></label>
+      <p class="hint">The page you open to see its screens. rackmap links to it as the remote screen; the KVM asks for its own sign-in there. Leave empty for a KVM that isn't on the network.</p>
+      <label>Number of ports<input name="port_count" type="number" min="1" max="64" value="1" inputmode="numeric"></label>
+      <p class="hint">How many machines it can be plugged into. A PiKVM on its own has one; with a PiKVM Switch, the switch's number of ports.</p>
+      <div id="kvm-account" hidden>
+        <div class="row">
+          <label>PiKVM account (optional)<input name="username" maxlength="64" autocomplete="off" placeholder="admin"></label>
+          <label>Password<input name="password" type="password" maxlength="256" autocomplete="new-password"></label>
+        </div>
+        <p class="hint">With an account, rackmap shows the screen itself, with keyboard, mouse and power buttons. rackmap signs in to check before saving, and stores the password encrypted on this rackmap server. Without one, rackmap just links to the PiKVM's page.</p>
+        <p class="hint" id="kvm-pw-note" hidden>Leave the password empty to keep the saved one. Entering it again also accepts the PiKVM's current certificate.</p>
+      </div>
+      <p class="error" id="kvm-error" role="alert" hidden></p>
+      <div class="buttons">
+        <button type="button" class="danger" id="kvm-delete" hidden>Remove</button>
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Cancel</button>
+        <button type="submit" class="primary" id="kvm-save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="type-dialog">
+    <form method="dialog" id="type-form" novalidate>
+      <h1>Type text on the machine</h1>
+      <p class="hint">The KVM types this on the machine's keyboard, for a password or a long command. It is sent as typed keys, assuming a US keyboard layout on the machine.</p>
+      <label>Text<textarea name="text" rows="4" maxlength="4000" autocomplete="off" spellcheck="false"></textarea></label>
+      <label class="check"><input type="checkbox" name="enter"> Press Enter afterwards</label>
+      <p class="error" id="type-error" role="alert" hidden></p>
+      <div class="buttons">
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Cancel</button>
+        <button type="submit" class="primary" id="type-send">Type it</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="power-dialog">
+    <form method="dialog" novalidate>
+      <h1>Power buttons</h1>
+      <p class="hint" id="power-now"></p>
+      <p class="hint">These press the machine's own front-panel buttons through the KVM. They only work if the KVM's power cable (ATX) is fitted to the machine.</p>
+      <div class="stack">
+        <button type="button" class="secondary" data-power="press">Press the power button</button>
+        <p class="hint">Switches the machine on. If it is running, asks it to shut down.</p>
+        <button type="button" class="danger" data-power="hold">Hold the power button</button>
+        <p class="hint">Forces it off. Anything unsaved on the machine is lost.</p>
+        <button type="button" class="danger" data-power="reset">Press the reset button</button>
+        <p class="hint">Restarts it at once, without shutting down first.</p>
+      </div>
+      <p class="error" id="power-error" role="alert" hidden></p>
+      <div class="buttons">
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="controller-dialog">
+    <form method="dialog" id="controller-form" novalidate>
+      <h1 id="controller-dialog-title">Connect the management controller</h1>
+      <p class="hint">Servers have a small built-in computer for management: iDRAC on Dell, iLO on HPE, BMC or IPMI on others. rackmap uses it to show power and health and to switch the server on and off. Its address and password are the controller's own, not the server's.</p>
+      <p class="hint">Not a server? Switches, firewalls and other gear with a serial cable to a console server get a “Console port” choice once a console server is set up, and a “KVM port” choice once a KVM is.</p>
+      <label>Controller address<input name="host" maxlength="120" placeholder="192.168.1.60" autocomplete="off" inputmode="url"></label>
+      <div class="row">
+        <label>Account<input name="username" maxlength="64" autocomplete="off" placeholder="root"></label>
+        <label>Password<input name="password" type="password" maxlength="256" autocomplete="new-password"></label>
+      </div>
+      <p class="hint" id="controller-pw-note" hidden>Leave the password empty to keep the saved one. Entering it again also accepts the controller's current certificate.</p>
+      <label>Text console command (optional)<input name="console_command" maxlength="80" autocomplete="off" placeholder="console com2" spellcheck="false"></label>
+      <p class="hint">What the controller's SSH login runs to reach the server's serial console. Dell iDRAC: <code>console com2</code>. HPE iLO: <code>vsp</code>. Leave empty if you don't use it.</p>
+      <input type="hidden" name="kvm_url">
+      <p class="hint">rackmap signs in to check these details before saving. The password is stored encrypted on this rackmap server.</p>
+      <p class="error" id="controller-error" role="alert" hidden></p>
+      <div class="buttons">
+        <button type="button" class="danger" id="controller-delete" hidden>Disconnect</button>
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Cancel</button>
+        <button type="submit" class="primary" id="controller-save">Connect</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="service-dialog">
+    <form method="dialog" id="service-form" novalidate>
+      <h1 id="service-dialog-title">Connect a service</h1>
+      <p class="hint">A service is software running on this equipment that rackmap can sign in to, so what runs there shows up here.</p>
+      <label id="service-kind-row">Service<select name="kind" id="service-kind"></select></label>
+      <div class="row">
+        <label>Address<input name="host" maxlength="120" placeholder="192.168.1.60" autocomplete="off" inputmode="url"></label>
+        <label>Port<input name="port" inputmode="numeric" maxlength="5" autocomplete="off"></label>
+      </div>
+      <label><span id="service-account-label">Account</span><input name="username" maxlength="128" autocomplete="off" spellcheck="false"></label>
+      <label><span id="service-secret-label">Secret</span><input name="secret" type="password" maxlength="512" autocomplete="new-password"></label>
+      <p class="hint" id="service-secret-note" hidden>Leave this empty to keep the saved one. Entering it again also accepts the certificate or identity the service shows now.</p>
+      <p class="hint" id="service-help"></p>
+      <div id="service-family-box" hidden>
+        <label>Family<select id="service-family"></select></label>
+        <p class="hint" id="service-family-note"></p>
+        <details class="guest-group" id="service-commands-box">
+          <summary>Commands this connection sends (change only if the switch refuses one)</summary>
+          <p class="hint">One command per line. <code>{port}</code> stands for the port and <code>{value}</code> for what you type or choose. <code>!wait 5</code> pauses five seconds. Leave a box empty to take that button away.</p>
+          <div id="service-commands"></div>
+        </details>
+      </div>
+      <div id="service-key-box" hidden>
+        <p class="hint">Instead of a password, you can give that account rackmap's own key: add this line to the account's authorized keys on the machine, and leave the password empty.</p>
+        <pre class="key-line" id="service-key"></pre>
+      </div>
+      <label class="check" id="service-relearn-row" hidden><input type="checkbox" name="relearn"> Accept its new identity (after reinstalling or replacing the machine)</label>
+      <label>How much rackmap may do<select name="level" id="service-level"></select></label>
+      <p class="hint">This is the most rackmap will ever do through this connection, whatever the sign-in itself allows. You can change it later. Anything that stops or restarts something asks you to confirm first, and everything rackmap does is listed under Settings.</p>
+      <p class="hint">rackmap signs in to check these details before saving. The secret is stored encrypted on this rackmap server.</p>
+      <p class="error" id="service-error" role="alert" hidden></p>
+      <div class="buttons">
+        <button type="button" class="danger" id="service-delete" hidden>Disconnect</button>
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Cancel</button>
+        <button type="submit" class="primary" id="service-save">Connect</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="log-dialog" class="wide">
+    <form method="dialog">
+      <h1 id="log-title">Logs</h1>
+      <pre class="log-text" id="log-text"></pre>
+      <div class="buttons">
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="monitoring-dialog">
+    <form method="dialog" id="monitoring-form" novalidate>
+      <h1 id="monitoring-dialog-title">Connect a monitoring system</h1>
+      <p class="hint">rackmap reads health, alerts and graphs from it and shows them on the equipment recorded here, matched by IP address and then by name. It never changes anything there.</p>
+      <label>Kind<select name="kind" id="monitoring-kind"></select></label>
+      <label>Address<input name="url" maxlength="300" placeholder="https://librenms.example.net" autocomplete="off" inputmode="url" spellcheck="false"></label>
+      <label>API token<input name="token" type="password" maxlength="400" autocomplete="new-password"></label>
+      <p class="hint" id="monitoring-token-note" hidden>Leave the token empty to keep the saved one.</p>
+      <p class="hint">In LibreNMS: your name at the top right, then API, API Settings, Create API access token. The token of a read-only account is enough. rackmap signs in to check before saving, and stores the token encrypted on this rackmap server.</p>
+      <p class="error" id="monitoring-error" role="alert" hidden></p>
+      <div class="buttons">
+        <button type="button" class="danger" id="monitoring-delete" hidden>Disconnect</button>
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Cancel</button>
+        <button type="submit" class="primary" id="monitoring-save">Connect</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="cables-dialog">
+    <form method="dialog" id="cable-form" novalidate>
+      <h1>Cables</h1>
+      <p class="hint">A cable joins two pieces of equipment. With a monitoring system connected, rackmap suggests the ones it can work out from what each switch port sees; nothing is recorded until you add it.</p>
+      <h2 id="cables-suggested-title" hidden>Suggested</h2>
+      <ul class="plain-list cable-list" id="cables-suggested"></ul>
+      <h2>Recorded</h2>
+      <p class="hint" id="cables-none">No cables recorded yet.</p>
+      <ul class="plain-list cable-list" id="cables-recorded"></ul>
+      <h2>Add one by hand</h2>
+      <div class="row">
+        <label>From<select name="a_device_id" id="cable-a"></select></label>
+        <label>Its port (optional)<input name="a_port" maxlength="80" autocomplete="off" placeholder="ether5"></label>
+      </div>
+      <div class="row">
+        <label>To<select name="b_device_id" id="cable-b"></select></label>
+        <label>Its port (optional)<input name="b_port" maxlength="80" autocomplete="off" placeholder="eth0"></label>
+      </div>
+      <label>Note (optional)<input name="note" maxlength="200" autocomplete="off" placeholder="colour, length, what it is for"></label>
+      <p class="error" id="cable-error" role="alert" hidden></p>
+      <div class="buttons">
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Close</button>
+        <button type="submit" class="primary" id="cable-save">Add cable</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="rack-dialog">
+    <form method="dialog" id="rack-form" novalidate>
+      <h1 id="rack-dialog-title">Add rack</h1>
+      <label>Name<input name="name" maxlength="80" required placeholder="Garage rack"></label>
+      <label>Height in rack units (U)<input name="height_u" type="number" min="1" max="60" step="1" required value="42" inputmode="numeric"></label>
+      <label>Notes<textarea name="notes" maxlength="2000" rows="2"></textarea></label>
+      <p class="error" id="rack-error" role="alert" hidden></p>
+      <div class="buttons">
+        <button type="button" class="danger" id="rack-delete" hidden>Delete rack</button>
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Cancel</button>
+        <button type="submit" class="primary" id="rack-save">Save rack</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="device-dialog">
+    <form method="dialog" id="device-form" novalidate>
+      <h1 id="device-dialog-title">Add equipment</h1>
+
+      <fieldset id="model-picker">
+        <legend>Model</legend>
+        <div id="model-search">
+          <label>Search the equipment database<input id="model-q" type="search" placeholder="e.g. CRS328, PowerEdge R720, UniFi 24" autocomplete="off"></label>
+          <ul class="results" id="model-results"></ul>
+          <button type="button" class="link" id="model-manual">It isn't listed — enter it by hand</button>
+        </div>
+        <div id="model-chosen" hidden>
+          <p class="chosen"><strong id="chosen-name"></strong> <span class="hint" id="chosen-meta"></span></p>
+          <button type="button" class="link" id="model-change">Choose a different model</button>
+        </div>
+        <div id="model-custom" hidden>
+          <div class="row">
+            <label>Maker<input name="manufacturer" maxlength="120"></label>
+            <label>Model<input name="model" maxlength="160"></label>
+          </div>
+          <div class="row">
+            <label>Height (U)<input name="u_height" type="number" min="0" max="60" step="0.5" value="1" inputmode="decimal"></label>
+            <label>Depth<select name="full_depth"><option value="true">Full depth</option><option value="false">Half depth</option></select></label>
+          </div>
+          <p class="hint">Use height 0 for equipment that doesn't mount in a rack.</p>
+          <button type="button" class="link" id="model-back">Search the database instead</button>
+        </div>
+      </fieldset>
+
+      <label>Name<input name="name" maxlength="120" placeholder="What you call it"></label>
+
+      <fieldset>
+        <legend>Where it sits</legend>
+        <div class="row">
+          <label>Rack<select name="rack_id" id="f-rack"></select></label>
+          <label>Side<select name="face" id="f-face"><option value="front">Front</option><option value="rear">Rear</option></select></label>
+        </div>
+        <label id="f-pos-label">Position (lowest U it occupies)<select name="position_u" id="f-pos"></select></label>
+        <p class="hint" id="f-pos-hint" hidden></p>
+      </fieldset>
+
+      <details id="more">
+        <summary>Addresses and notes</summary>
+        <div class="row">
+          <label>IP address<input name="ip" maxlength="64" inputmode="url" autocomplete="off"></label>
+          <label>MAC address<input name="mac" maxlength="32" autocomplete="off"></label>
+        </div>
+        <div class="row">
+          <label>Serial number<input name="serial" maxlength="80" autocomplete="off"></label>
+          <label>Admin page<input name="admin_url" maxlength="300" placeholder="https://…" inputmode="url" autocomplete="off"></label>
+        </div>
+        <label>Notes<textarea name="notes" maxlength="4000" rows="3"></textarea></label>
+      </details>
+
+      <p class="error" id="device-error" role="alert" hidden></p>
+      <div class="buttons">
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Cancel</button>
+        <button type="submit" class="primary" id="device-save">Add equipment</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="ask-dialog">
+    <form method="dialog">
+      <h1 id="ask-title"></h1>
+      <label><span id="ask-text"></span><input id="ask-input" maxlength="60" autocomplete="off"><select id="ask-choice" hidden></select></label>
+      <div class="buttons">
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Cancel</button>
+        <button type="submit" class="primary" value="ok">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <h1 id="confirm-title"></h1>
+      <p id="confirm-text"></p>
+      <div class="buttons">
+        <span class="spacer"></span>
+        <button type="button" class="secondary" data-close>Cancel</button>
+        <button type="submit" class="danger" id="confirm-ok" value="ok"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/static/vendor/xterm.js" defer></script>
+  <script src="/static/vendor/addon-fit.js" defer></script>
+  <script src="/static/faceplate.js" defer></script>
+  <script src="/static/app.js" defer></script>
+  <script src="/static/views.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+services:
+  rackmap:
+    build: .
+    ports:
+      - "8443:8443"
+    volumes:
+      - rackmap-data:/data
+    restart: unless-stopped
+volumes:
+  rackmap-data:

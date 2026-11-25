@@ -1,0 +1,21 @@
+[Unit]
+Description=rackmap network and rack manager
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=rackmap
+Group=rackmap
+WorkingDirectory=/opt/rackmap
+Environment=RACKMAP_DATA=/var/lib/rackmap
+ExecStart=/opt/rackmap/.venv/bin/python -m rackmap
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/rackmap
+
+[Install]
+WantedBy=multi-user.target
